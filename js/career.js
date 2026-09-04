@@ -4,7 +4,7 @@ import { escapeHTML } from './security.js';
 let selectedCompanyId = null;
 let isSalaryVisible = false;
 
-// 근속 기간 계산
+// 안전한 근속 기간 계산
 export function calcDuration(start, end, isCurrent) {
   if (!start) return '';
   const s = new Date(start);
@@ -20,7 +20,16 @@ export function calcDuration(start, end, isCurrent) {
   return `${m}개월`;
 }
 
-// 상단 요약 통계 갱신
+// 🌟 입사일 기준 내림차순(최신순) 정렬 헬퍼 함수
+export function getSortedCareers() {
+  return [...cloudCareers].sort((a, b) => {
+    const timeA = a.startDate ? new Date(a.startDate).getTime() : 0;
+    const timeB = b.startDate ? new Date(b.startDate).getTime() : 0;
+    return timeB - timeA; // 최신 입사일이 상단으로
+  });
+}
+
+// 상단 통계 갱신
 export function updateCareerStats() {
   const totalEl = document.getElementById('stat-total-companies');
   const durationEl = document.getElementById('stat-total-duration');
@@ -33,11 +42,13 @@ export function updateCareerStats() {
   let totalColleagues = 0;
   let currentCompany = null;
 
-  cloudCareers.forEach(c => {
+  const sorted = getSortedCareers();
+
+  sorted.forEach(c => {
     if (Array.isArray(c.colleagues)) {
       totalColleagues += c.colleagues.length;
     }
-    if (c.isCurrent) currentCompany = c;
+    if (c.isCurrent && !currentCompany) currentCompany = c;
     if (c.startDate) {
       const s = new Date(c.startDate);
       const e = c.isCurrent || !c.endDate ? new Date() : new Date(c.endDate);
@@ -54,27 +65,29 @@ export function updateCareerStats() {
     durationEl.innerText = totY > 0 ? `${totY}년 ${totM}개월` : `${totM}개월`;
   }
   if (currentRoleEl) {
-    currentRoleEl.innerText = currentCompany ? currentCompany.companyName : (cloudCareers[0]?.companyName || '-');
+    currentRoleEl.innerText = currentCompany ? currentCompany.companyName : (sorted[0]?.companyName || '-');
   }
   if (colCountEl) colCountEl.innerText = totalColleagues;
 }
 
-// 좌측 목록 렌더링
+// 좌측 목록 렌더링 (입사일 최신순 정렬 적용)
 export function renderCompanyList() {
   const container = document.getElementById('company-list-container');
   const countBadge = document.getElementById('list-count');
   if (!container) return;
 
-  if (countBadge) countBadge.innerText = cloudCareers.length;
+  const sorted = getSortedCareers();
 
-  if (cloudCareers.length > 0) {
-    const exists = cloudCareers.some(c => String(c.id) === String(selectedCompanyId));
-    if (!exists) selectedCompanyId = String(cloudCareers[0].id);
+  if (countBadge) countBadge.innerText = sorted.length;
+
+  if (sorted.length > 0) {
+    const exists = sorted.some(c => String(c.id) === String(selectedCompanyId));
+    if (!exists) selectedCompanyId = String(sorted[0].id);
   } else {
     selectedCompanyId = null;
   }
 
-  if (cloudCareers.length === 0) {
+  if (sorted.length === 0) {
     container.innerHTML = `
       <div class="py-12 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-2xl bg-slate-950/40">
         <i class="fa-solid fa-briefcase text-2xl mb-2 block text-slate-600"></i>
@@ -85,7 +98,7 @@ export function renderCompanyList() {
     return;
   }
 
-  container.innerHTML = cloudCareers.map(c => {
+  container.innerHTML = sorted.map(c => {
     const isSelected = String(c.id) === String(selectedCompanyId);
     const duration = calcDuration(c.startDate, c.endDate, c.isCurrent);
 
@@ -146,6 +159,7 @@ export function renderCompanyDetail() {
 
   container.innerHTML = `
     <div class="space-y-6">
+      <!-- 1. 헤더 -->
       <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-4">
         <div>
           <div class="flex items-center gap-2.5 mb-1">
@@ -178,6 +192,7 @@ export function renderCompanyDetail() {
         </div>
       </div>
 
+      <!-- 2. 보상/처우 보안 토글 -->
       <div class="bg-slate-950/70 rounded-2xl border border-slate-800/80 p-4 transition-all">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2 text-xs font-bold text-slate-300">
@@ -212,6 +227,7 @@ export function renderCompanyDetail() {
         `}
       </div>
 
+      <!-- 3. 업무 및 프로젝트 -->
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
@@ -249,6 +265,7 @@ export function renderCompanyDetail() {
         `}
       </div>
 
+      <!-- 4. 동료 네트워크 -->
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
@@ -292,6 +309,7 @@ export function renderCompanyDetail() {
         `}
       </div>
 
+      <!-- 5. 퇴사 사유 -->
       ${c.leavingReason ? `
         <div class="bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60 space-y-1">
           <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">퇴사 사유 및 회고</span>
@@ -320,7 +338,7 @@ export function handleIsCurrentChange(checked) {
   }
 }
 
-// 🌟 오류 없이 정상 작동하는 openCompanyModal
+// 모달 열기 함수
 export function openCompanyModal(id = null) {
   const modal = document.getElementById('company-modal');
   const title = document.getElementById('company-modal-title');
@@ -434,7 +452,8 @@ export function deleteCompany(id) {
   if (idx !== -1) {
     cloudCareers.splice(idx, 1);
   }
-  selectedCompanyId = cloudCareers.length > 0 ? String(cloudCareers[0].id) : null;
+  const sorted = getSortedCareers();
+  selectedCompanyId = sorted.length > 0 ? String(sorted[0].id) : null;
 
   syncCareers(() => {
     updateCareerStats();
