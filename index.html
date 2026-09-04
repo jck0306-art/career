@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>경력 관리 (CareerTrack)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- 404 방지용 상대경로 확정 -->
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-16">
+
+  <!-- 상단 헤더 -->
+  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 md:px-8 py-3.5">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 text-lg">
+          <i class="fa-solid fa-briefcase"></i>
+        </div>
+        <h1 class="text-base md:text-lg font-bold text-white flex items-center gap-2">
+          CareerTrack <span class="text-xs font-normal text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">Career Archive</span>
+        </h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="cloud-status" class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 font-mono">
+          <i class="fa-solid fa-cloud"></i> DB 연결 중...
+        </span>
+        <button id="btn-open-company-modal" onclick="window.openCompanyModal && window.openCompanyModal()" class="text-xs md:text-sm bg-purple-600 hover:bg-purple-500 text-white font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-purple-600/20">
+          <i class="fa-solid fa-plus text-xs"></i> 회사 이력 등록
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 본문 -->
+  <main class="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+
+    <!-- 상단 커리어 요약 통계 카드 -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+          <i class="fa-solid fa-calendar-check text-purple-400"></i> 총 경력 기간
+        </div>
+        <div id="stat-total-duration" class="text-xl font-bold text-purple-300 font-mono">0개월</div>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+          <i class="fa-solid fa-building text-indigo-400"></i> 거쳐간 회사 수
+        </div>
+        <div id="stat-total-companies" class="text-2xl font-bold text-white font-mono">0</div>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+          <i class="fa-solid fa-user-tie text-emerald-400"></i> 현재 소속 / 최종 회사
+        </div>
+        <div id="stat-current-role" class="text-sm font-bold text-emerald-300 truncate mt-1">-</div>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+        <div class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+          <i class="fa-solid fa-users text-amber-400"></i> 동료 네트워크
+        </div>
+        <div id="stat-total-colleagues" class="text-2xl font-bold text-amber-300 font-mono">0</div>
+      </div>
+    </div>
+
+    <!-- 좌우 Master-Detail 레이아웃 -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <!-- 좌측: 회사 목록 리스트 -->
+      <div class="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+        <div class="flex justify-between items-center px-1 pb-1 border-b border-slate-800/80">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-timeline text-purple-400"></i> 회사별 재직 이력
+          </span>
+          <span id="list-count" class="text-xs font-mono text-purple-300 font-bold bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">0</span>
+        </div>
+        <div id="company-list-container" class="space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto pr-1"></div>
+      </div>
+
+      <!-- 우측: 선택한 회사 상세 내용 -->
+      <div class="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-3xl p-5 md:p-6 shadow-xl min-h-[460px]">
+        <div id="company-detail-content"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 1. 회사 이력 등록/수정 모달 -->
+  <div id="company-modal" class="fixed inset-0 bg-black/75 hidden items-center justify-center p-4 z-50 overflow-y-auto">
+    <div class="bg-slate-900 rounded-2xl max-w-lg w-full p-6 border border-slate-800 shadow-2xl space-y-4 my-8">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 id="company-modal-title" class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-briefcase text-purple-400"></i> 새 회사 이력 등록
+        </h3>
+        <button onclick="window.closeCompanyModal()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="form-company-id" />
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">회사명 *</label>
+          <input id="form-company-name" type="text" placeholder="예: (주)카카오, 네이버" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">고용 형태</label>
+          <select id="form-employment-type" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:border-purple-500 focus:outline-none">
+            <option value="정규직">정규직</option>
+            <option value="계약직">계약직</option>
+            <option value="파견직">파견직</option>
+            <option value="프리랜서">프리랜서</option>
+            <option value="인턴">인턴</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">근무 부서명</label>
+          <input id="form-department" type="text" placeholder="예: 정보보안팀, 개발본부" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">직급 / 직책</label>
+          <input id="form-position" type="text" placeholder="예: 대리, 보안 엔지니어" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">입사일 *</label>
+          <input id="form-start-date" type="date" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none font-mono" />
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs text-slate-400">퇴사일</label>
+            <label class="flex items-center gap-1.5 text-xs text-emerald-400 cursor-pointer select-none">
+              <input id="form-is-current" onchange="window.handleIsCurrentChange(this.checked)" type="checkbox" class="accent-emerald-500 w-3.5 h-3.5" />
+              <span>재직 중</span>
+            </label>
+          </div>
+          <input id="form-end-date" type="date" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none font-mono" />
+        </div>
+      </div>
+
+      <!-- 보상/처우 -->
+      <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-2.5">
+        <span class="text-xs font-bold text-amber-400 block flex items-center gap-1.5">
+          <i class="fa-solid fa-lock text-[10px]"></i> 처우 및 보상 내역 (화면에서 '+' 버튼으로 확인)
+        </span>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">계약 연봉</label>
+            <input id="form-salary" type="text" placeholder="예: 5,500만원" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">성과급 / 인센티브</label>
+            <input id="form-bonus" type="text" placeholder="예: 연 500만원, 기본급 200%" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">복지 혜택</label>
+          <input id="form-welfare" type="text" placeholder="예: 식대 지원(월 20만), 복지포인트 100만, 재택근무" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">퇴사 / 이직 사유 (선택)</label>
+        <textarea id="form-leaving-reason" rows="2" placeholder="솔직한 퇴사 사유 및 당시 배운 점 정리" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-purple-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="window.closeCompanyModal()" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition">취소</button>
+        <button onclick="window.saveCompany()" class="px-5 py-2 text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 수행 업무/프로젝트 등록 모달 -->
+  <div id="task-modal" class="fixed inset-0 bg-black/75 hidden items-center justify-center p-4 z-50 overflow-y-auto">
+    <div class="bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-800 shadow-2xl space-y-4 my-8">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 id="task-modal-title" class="text-base font-bold text-white">수행 업무 및 프로젝트 등록</h3>
+        <button onclick="window.closeTaskModal()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <input type="hidden" id="form-task-id" />
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">업무 / 프로젝트명 *</label>
+        <input id="form-task-title" type="text" placeholder="예: 사내 망분리 고도화 프로젝트" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">수행 기간</label>
+        <input id="form-task-period" type="text" placeholder="예: 2024.03 ~ 2024.08" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 focus:outline-none font-mono" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">상세 성과 & 역할 기여도</label>
+        <textarea id="form-task-content" rows="4" placeholder="내 역할, 성과 수치(15% 절감 등), 사용 기술 스택 요약" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:border-purple-500 focus:outline-none"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="window.closeTaskModal()" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition">취소</button>
+        <button onclick="window.saveTask()" class="px-5 py-2 text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 함께한 동료 등록 모달 -->
+  <div id="colleague-modal" class="fixed inset-0 bg-black/75 hidden items-center justify-center p-4 z-50 overflow-y-auto">
+    <div class="bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-800 shadow-2xl space-y-4 my-8">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 id="colleague-modal-title" class="text-base font-bold text-white">사내 동료 네트워크 등록</h3>
+        <button onclick="window.closeColleagueModal()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <input type="hidden" id="form-col-id" />
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">이름 *</label>
+          <input id="form-col-name" type="text" placeholder="예: 홍길동" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">부서 / 직책</label>
+          <input id="form-col-dept-role" type="text" placeholder="예: 보안운영팀 과장" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none" />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">연락처</label>
+          <input id="form-col-contact" type="text" placeholder="010-0000-0000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none font-mono" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">이메일</label>
+          <input id="form-col-email" type="email" placeholder="example@email.com" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none font-mono" />
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">메모 (레퍼런스 체크 여부 등)</label>
+        <textarea id="form-col-memo" rows="2" placeholder="예: 이직 시 추천서 약속, 친절했던 사수님" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:border-amber-400 focus:outline-none"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="window.closeColleagueModal()" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition">취소</button>
+        <button onclick="window.saveColleague()" class="px-5 py-2 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl transition shadow">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 포털 패밀리 사이트 퀵 네비게이터 -->
+  <div class="fixed bottom-6 right-6 z-50">
+    <div id="family-site-menu" class="hidden mb-3 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1 transition-all">
+      <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1">
+        Family Sites
+      </div>
+      <a href="https://jck0306-art.github.io/portal/" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/80 transition group">
+        <div class="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition">
+          <i class="fa-solid fa-house text-[10px]"></i>
+        </div>
+        <span>포털 허브</span>
+      </a>
+      <a href="https://jck0306-art.github.io/license-mgmt/" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/80 transition group">
+        <div class="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition">
+          <i class="fa-solid fa-graduation-cap text-[10px]"></i>
+        </div>
+        <span>자격증 관리</span>
+      </a>
+      <a href="https://jck0306-art.github.io/IronTrack/" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/80 transition group">
+        <div class="w-6 h-6 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 group-hover:bg-rose-600 group-hover:text-white transition">
+          <i class="fa-solid fa-droplet text-[10px]"></i>
+        </div>
+        <span>철분 관리 (IronTrack)</span>
+      </a>
+      <a href="https://jck0306-art.github.io/virtual/" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/80 transition group">
+        <div class="w-6 h-6 rounded-lg bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 group-hover:bg-pink-600 group-hover:text-white transition">
+          <i class="fa-solid fa-compact-disc text-[10px]"></i>
+        </div>
+        <span>덕질 아카이브</span>
+      </a>
+      <a href="https://jck0306-art.github.io/perfume/" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/80 transition group">
+        <div class="w-6 h-6 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition">
+          <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+        </div>
+        <span>향수 아카이브</span>
+      </a>
+      <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-purple-300 bg-purple-500/20 border border-purple-500/30">
+        <div class="w-6 h-6 rounded-lg bg-purple-500/30 flex items-center justify-center text-purple-300">
+          <i class="fa-solid fa-briefcase text-[10px]"></i>
+        </div>
+        <span>경력 관리 (현재)</span>
+      </div>
+    </div>
+
+    <button id="family-site-btn" onclick="window.toggleFamilySiteMenu()" class="w-12 h-12 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 shadow-2xl flex items-center justify-center text-lg transition duration-200 hover:scale-105 active:scale-95 ml-auto">
+      <i id="family-site-icon" class="fa-solid fa-layer-group text-purple-400"></i>
+    </button>
+  </div>
+
+</body>
+</html>
