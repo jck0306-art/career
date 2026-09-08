@@ -1,7 +1,3 @@
-import { initAuthGuard, logoutAdmin } from './security.js';
-
-window.logoutAdmin = logoutAdmin;
-
 import { initFirebase } from './firebase.js';
 import { 
   updateCareerStats, 
@@ -22,6 +18,11 @@ import {
   saveColleague, 
   deleteColleague 
 } from './career.js';
+
+import { initAuthGuard, logoutAdmin } from './security.js';
+
+window.logoutAdmin = logoutAdmin;
+
 
 // 전역 윈도우 바인딩 (인라인 onclick 대응)
 window.selectCompany = selectCompany;
